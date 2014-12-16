@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" media="all" type="text/css" href="http://fonts.googleapis.com/css?family=Open+Sans:400,400italic,700|Oswald|Source+Code+Pro" />
+  <link rel="stylesheet" type="text/css" href="screen.css"/>
+
+  <script type="text/javascript" src="lib/ace/ace.js"></script>
+  <script type="text/javascript" src="lib/ace/ext-language_tools.js"></script>
+  
+  <script type="text/javascript" src="jquery-1.11.1.min.js"></script>
+  <script type="text/javascript" src="lib/jquery.ui.js"></script>
+  
+  <script type="text/javascript" src="lib/ros/threejs/three.js"></script>
+  <script type="text/javascript" src="lib/ros/threejs/ColladaLoader.js"></script>
+  <script type="text/javascript" src="lib/ros/threejs/STLLoader.js"></script>
+  
+  <script type="text/javascript" src="lib/ros/Ros3D.js"></script>
+  <script type="text/javascript" src="lib/ros/ColladaAnimationCompress/ColladaLoader2.js"></script>
+  <script type="text/javascript" src="lib/ros/depthcloud/DepthCloud.js"></script>
+  <script type="text/javascript" src="lib/ros/EventEmitter2/eventemitter2.js"></script>
+  <script type="text/javascript" src="lib/ros/models/Arrow.js"></script>
+  <script type="text/javascript" src="lib/ros/models/Axes.js"></script>
+  <script type="text/javascript" src="lib/ros/models/Grid.js"></script>
+  <script type="text/javascript" src="lib/ros/models/MeshResource.js"></script>
+  <script type="text/javascript" src="lib/ros/models/TriangleList.js"></script>
+  <script type="text/javascript" src="lib/ros/interactivemarkers/InteractiveMarkerClient.js"></script>
+  <script type="text/javascript" src="lib/ros/interactivemarkers/InteractiveMarkerControl.js"></script>
+  <script type="text/javascript" src="lib/ros/interactivemarkers/InteractiveMarkerHandle.js"></script>
+  <script type="text/javascript" src="lib/ros/interactivemarkers/InteractiveMarker.js"></script>
+  <script type="text/javascript" src="lib/ros/interactivemarkers/InteractiveMarkerMenu.js"></script>
+  <script type="text/javascript" src="lib/ros/maps/OccupancyGridClient.js"></script>
+  <script type="text/javascript" src="lib/ros/maps/OccupancyGrid.js"></script>
+  <script type="text/javascript" src="lib/ros/markers/MarkerArrayClient.js"></script>
+  <script type="text/javascript" src="lib/ros/markers/MarkerClient.js"></script>
+  <script type="text/javascript" src="lib/ros/markers/Marker.js"></script>
+  <script type="text/javascript" src="lib/ros/roslibjs/roslib.js"></script>
+  <script type="text/javascript" src="lib/ros/urdf/UrdfClient.js"></script>
+  <script type="text/javascript" src="lib/ros/urdf/Urdf.js"></script>
+  <script type="text/javascript" src="lib/ros/visualization/Viewer.js"></script>
+  <script type="text/javascript" src="lib/ros/visualization/SceneNode.js"></script>
+  <script type="text/javascript" src="lib/ros/visualization/interaction/Highlighter.js"></script>
+  <script type="text/javascript" src="lib/ros/visualization/interaction/MouseHandler.js"></script>
+  <script type="text/javascript" src="lib/ros/visualization/interaction/OrbitControls.js"></script>
+  <script type="text/javascript" src="lib/ros/json_prolog.js"></script>
+  
+  <script type="text/javascript" src="lib/d3/d3.v3.min.js"></script>
+  <script type="text/javascript" src="lib/d3/d3-tip.js"></script>
+  
+  <script type="text/javascript" src="lib/chart/google-jsapi.js"></script>
+  
+  <script type="text/javascript" src="lib/chart/DonutChart.js"></script>
+  <script type="text/javascript" src="lib/chart/BarChart.js"></script>
+  <script type="text/javascript" src="lib/chart/TreeDiagram.js"></script>
+  <script type="text/javascript" src="lib/chart/Timeline.js"></script>
+  <script type="text/javascript" src="lib/chart/DataVisClient.js"></script>
+  <script type="text/javascript" src="lib/chart/array-nonstandard.js"></script>
+  <script type="text/javascript" src="lib/chart/Control.js"></script>
+  
+  <script type="text/javascript" src="lib/designator/desig.js"></script>
+  
+  <script type="text/javascript" src="lib/layout/jquery.layout-1.4.0.js"></script>
+
+  <script type="text/javascript" type="text/javascript">
+
+
+    // global ROS handle
+    var ros;
+    
+    //global jsonprolog handle
+    var prolog;
+
+    // EDIT_ME config upload script
+    var url = "http://localhost/~user/upload.php"; // change to your upload script
+    var rootdir = "~/public_html/"; // path where the images get uploaded to
+
+    // generate video from images, 1 fps
+    var ffmpeg_query = "shell('ffmpeg -y -r 1 -i " + rootdir + "frame%d.png -vcodec mpeg4 " + rootdir + "exp.avi')";
+    
+    function init() {
+    
+      // Connect to ROS.
+      ros = new ROSLIB.Ros({
+        url : 'ws://localhost:9090'
+      });
+
+      // Create the main viewer.
+      var viewer = new ROS3D.Viewer({
+        divID : 'markers',
+        width : 950,
+        height : 495,
+        antialias : true,
+        background : '#ffffff'
+      });
+      
+      viewer.addObject(new ROS3D.Grid());
+
+      // Setup a client to listen to TFs.
+      var tfClient = new ROSLIB.TFClient({
+        ros : ros,
+        angularThres : 0.01,
+        transThres : 0.01,
+        rate : 10.0,
+        fixedFrame : '/my_frame'
+      });
+
+      // Setup the marker client.
+      var markerClient = new ROS3D.MarkerClient({
+        ros : ros,
+        tfClient : tfClient,
+        topic : '/visualization_marker',
+        rootObject : viewer.scene
+      });
+      
+      // Setup the marker array client.
+      var markerArrayClient = new ROS3D.MarkerArrayClient({
+        ros : ros,
+        tfClient : tfClient,
+        topic : '/visualization_marker_array',
+        markerClient : markerClient
+      });
+
+    };
+
+    function generate_video() {
+
+      var startEndQuery = "findall(Time, task_start(T, Time), _List), sort(_List, _Sorted), nth0(0, _Sorted, X), last(_Sorted, Y), string_concat('http://knowrob.org/kb/cram_log.owl#timepoint_', Firststring, X), string_concat('http://knowrob.org/kb/cram_log.owl#timepoint_', Laststring, Y), atom_number(Firststring, First), atom_number(Laststring, Last)";
+
+      var startTime = 0;
+      var endTime = 0;
+
+      prolog = new JsonProlog(ros, {raw: true});
+
+      prolog.jsonQuery(startEndQuery, function(result){
+        prolog.finishClient();
+
+        startTime = result.First;
+        endTime = result.Last;
+
+        function recurse(n, finish){
+          console.log(n, finish);
+          if(n >= finish) {
+            prolog.finishClient();
+            console.log("finished recursing, generating video");
+            setTimeout(function(){prolog.jsonQuery(ffmpeg_query, function(result){ 
+              prolog.finishClient();
+            })}, 3000);
+            return;
+          } else {
+            var actualTime = n + parseInt(startTime);
+            var robotPoseAtTime = "E = " + actualTime.toString() + ", mng_robot_pose_at_time(pr2:'PR2Robot1','/map',E,Pose), add_robot_as_basic_semantic_instance(Pose, E, SemanticMapInstance), add_object_with_children(SemanticMapInstance), highlight_object(SemanticMapInstance)";
+            prolog.jsonQuery(robotPoseAtTime, function(result){
+              prolog.finishClient();
+              setTimeout(function(){get_image(function(blob){
+                upload_blob(blob, 'frame'+ n +'.png');
+                recurse(n+1, finish);
+              })}, 3000); // time between images, wait for canvas actualization
+              
+            });
+          }
+        };
+
+        recurse(0, 10);//endTime); // EDIT_ME for testing purpose, use a smaller number than endTime, otherwise hundreds or even thousands of images will be generated and uploaded 
+
+      });
+
+    };
+
+    function get_image(callback) {
+      var canvas = document.querySelector('#markers > canvas:nth-child(1)');
+      canvas.toBlob(callback, "image/png");
+    };
+
+    function upload_blob(blob, name) {
+      // source: http://stackoverflow.com/questions/13333378/how-can-javascript-upload-a-blob
+      var reader = new FileReader();
+
+      reader.onload = function(event){
+        var fd = new FormData();
+        fd.append('fname', name);
+        fd.append('data', event.target.result);
+        $.ajax({
+          type: 'POST',
+          url: url,
+          data: fd,
+          processData: false,
+          contentType: false
+        }).done(function(data) {
+            console.log(data);
+        });
+      };
+      reader.readAsDataURL(blob);
+    };
+
+    /*function test_upload() {
+      get_image(function(blob){upload_blob(blob, "test.png")});
+    };*/
+
+  </script>
+</head>
+
+<body onload="init()" style="position:relative; left:20px;">
+  <h1>Experiment Video Generator</h1>
+  <div>
+  <div id="markers" style="position:absolute; top:75px; width:950px; border: 1px black solid; "></div>
+
+  <div id="control_panel" style="position:relative; top:510px;">
+      <input id="generate_video" type="button" value="generate video" onclick="generate_video()">
+      <!--<input id="test_upload" type="button" value="test upload" onclick="test_upload()">-->
+  </div>
+  </div>
+
+</body>
+</html>
