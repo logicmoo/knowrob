@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" media="all" type="text/css" href="http://fonts.googleapis.com/css?family=Open+Sans:400,400italic,700|Oswald|Source+Code+Pro" />
+  <link rel="stylesheet" type="text/css" href="screen.css"/>
+
+  <script type="text/javascript" src="lib/ace/ace.js"></script>
+  <script type="text/javascript" src="lib/ace/ext-language_tools.js"></script>
+  
+  <script type="text/javascript" src="jquery-1.11.1.min.js"></script>
+  <script type="text/javascript" src="lib/jquery.ui.js"></script>
+  
+  <script type="text/javascript" src="lib/ros/threejs/three.js"></script>
+  <script type="text/javascript" src="lib/ros/threejs/ColladaLoader.js"></script>
+  <script type="text/javascript" src="lib/ros/threejs/STLLoader.js"></script>
+  
+  <script type="text/javascript" src="lib/ros/Ros3D.js"></script>
+  <script type="text/javascript" src="lib/ros/ColladaAnimationCompress/ColladaLoader2.js"></script>
+  <script type="text/javascript" src="lib/ros/depthcloud/DepthCloud.js"></script>
+  <script type="text/javascript" src="lib/ros/EventEmitter2/eventemitter2.js"></script>
+  <script type="text/javascript" src="lib/ros/models/Arrow.js"></script>
+  <script type="text/javascript" src="lib/ros/models/Axes.js"></script>
+  <script type="text/javascript" src="lib/ros/models/Grid.js"></script>
+  <script type="text/javascript" src="lib/ros/models/MeshResource.js"></script>
+  <script type="text/javascript" src="lib/ros/models/TriangleList.js"></script>
+  <script type="text/javascript" src="lib/ros/interactivemarkers/InteractiveMarkerClient.js"></script>
+  <script type="text/javascript" src="lib/ros/interactivemarkers/InteractiveMarkerControl.js"></script>
+  <script type="text/javascript" src="lib/ros/interactivemarkers/InteractiveMarkerHandle.js"></script>
+  <script type="text/javascript" src="lib/ros/interactivemarkers/InteractiveMarker.js"></script>
+  <script type="text/javascript" src="lib/ros/interactivemarkers/InteractiveMarkerMenu.js"></script>
+  <script type="text/javascript" src="lib/ros/maps/OccupancyGridClient.js"></script>
+  <script type="text/javascript" src="lib/ros/maps/OccupancyGrid.js"></script>
+  <script type="text/javascript" src="lib/ros/markers/MarkerArrayClient.js"></script>
+  <script type="text/javascript" src="lib/ros/markers/MarkerClient.js"></script>
+  <script type="text/javascript" src="lib/ros/markers/Marker.js"></script>
+  <script type="text/javascript" src="lib/ros/roslibjs/roslib.js"></script>
+  <script type="text/javascript" src="lib/ros/urdf/UrdfClient.js"></script>
+  <script type="text/javascript" src="lib/ros/urdf/Urdf.js"></script>
+  <script type="text/javascript" src="lib/ros/visualization/Viewer.js"></script>
+  <script type="text/javascript" src="lib/ros/visualization/SceneNode.js"></script>
+  <script type="text/javascript" src="lib/ros/visualization/interaction/Highlighter.js"></script>
+  <script type="text/javascript" src="lib/ros/visualization/interaction/MouseHandler.js"></script>
+  <script type="text/javascript" src="lib/ros/visualization/interaction/OrbitControls.js"></script>
+  <script type="text/javascript" src="lib/ros/json_prolog.js"></script>
+  
+  <script type="text/javascript" src="lib/d3/d3.v3.min.js"></script>
+  <script type="text/javascript" src="lib/d3/d3-tip.js"></script>
+  
+  <script type="text/javascript" src="lib/chart/google-jsapi.js"></script>
+  
+  <script type="text/javascript" src="lib/chart/DonutChart.js"></script>
+  <script type="text/javascript" src="lib/chart/BarChart.js"></script>
+  <script type="text/javascript" src="lib/chart/TreeDiagram.js"></script>
+  <script type="text/javascript" src="lib/chart/Timeline.js"></script>
+  <script type="text/javascript" src="lib/chart/DataVisClient.js"></script>
+  <script type="text/javascript" src="lib/chart/array-nonstandard.js"></script>
+  <script type="text/javascript" src="lib/chart/Control.js"></script>
+  
+  <script type="text/javascript" src="lib/designator/desig.js"></script>
+  
+  <script type="text/javascript" src="lib/layout/jquery.layout-1.4.0.js"></script>
+
+  <script type="text/javascript" type="text/javascript">
+
+    // EDIT_ME this query gives the tasks which should be included in the
+    // summary file. edit as desired.
+    var whitelist_query = "_Whitelist = ['http://knowrob.org/kb/knowrob.owl#BaseMovement'], task(T), task_class(T, Class), member(Class, _Whitelist), task_start(T, Start), task_end(T, End), task_goal(T, Goal), string_concat('http://knowrob.org/kb/cram_log.owl#timepoint_', Image, Start)";
+
+    // global ROS handle
+    var ros;
+    
+    //global jsonprolog handle
+    var prolog;
+    
+    
+    function init() {
+    
+      // Connect to ROS.
+      ros = new ROSLIB.Ros({
+        url : 'ws://localhost:9090'
+      });
+
+      // Create the main viewer.
+      var viewer = new ROS3D.Viewer({
+        divID : 'markers',
+        width : 950,
+        height : 495,
+        antialias : true,
+        background : '#ffffff'
+      });
+      
+      viewer.addObject(new ROS3D.Grid());
+
+      // Setup a client to listen to TFs.
+      var tfClient = new ROSLIB.TFClient({
+        ros : ros,
+        angularThres : 0.01,
+        transThres : 0.01,
+        rate : 10.0,
+        fixedFrame : '/my_frame'
+      });
+
+      // Setup the marker client.
+      var markerClient = new ROS3D.MarkerClient({
+        ros : ros,
+        tfClient : tfClient,
+        topic : '/visualization_marker',
+        rootObject : viewer.scene
+      });
+      
+      // Setup the marker array client.
+      var markerArrayClient = new ROS3D.MarkerArrayClient({
+        ros : ros,
+        tfClient : tfClient,
+        topic : '/visualization_marker_array',
+        markerClient : markerClient
+      });
+
+
+      var options = {
+        ros: ros,
+        containerId: '#chart',
+        topic: 'data_vis_msgs',
+        //width: 500,//210,
+        //height: 500//210
+      };
+      var dataVisClient = new DataVisClient(options);
+
+    };
+
+    function generate_summary() {
+
+      var latex_head = "\\documentclass[12pt,pdftex,a4paper]{scrreprt}\n"+
+        "\\usepackage[english]{babel}\n"+
+        "\\usepackage[utf8]{inputenc}\n"+
+        "\\usepackage[T1]{fontenc}\n"+
+        "\\usepackage{amsmath}\n"+
+        "\\usepackage[left=3cm,right=2.5cm,top=2cm,bottom=1cm,includeheadfoot]{geometry}\n"+
+        "\\usepackage{graphicx,caption}\n"+
+        "\\usepackage{grffile}\n"+
+        "\\usepackage{hyperref}\n"+
+        "\\usepackage{listings}\n"+
+        "\\usepackage{color}\n"+
+        "\\begin{document}\n"+
+        "\\section{Experiment Summary}\n"+
+        "\\subsection{Metadata}\n"+
+        "\\begin{tabular}{|l|p{5cm}|}\n"+
+        "\\hline\n";
+
+      var latex_tail = "\\end{document}";
+      var summary_string = "";
+
+      summary_string += latex_head;
+
+      prolog = new JsonProlog(ros, {raw: true});
+
+      // get metadata
+      prolog.jsonQuery("metadata_experiment_name(Name)", function(result){
+        summary_string += "Name & \\begin{verbatim}" + result.Name + "\\end{verbatim}\\\\\n\\hline\n";
+      //});
+      prolog.finishClient();
+
+      prolog.jsonQuery("metadata_creator(Creator)", function(result){
+        summary_string += "Creator & " + result.Creator + "\\\\\n\\hline\n";
+      //});
+      prolog.finishClient();
+
+      prolog.jsonQuery("metadata_experiment(Type)", function(result){
+        summary_string += "Experiment type & " + result.Type + "\\\\\n\\hline\n";
+      //});
+      prolog.finishClient();
+
+      prolog.jsonQuery("metadata_description(Desc)", function(result){
+        summary_string += "Description & " + result.Desc + "\\\\\n\\hline\n";
+      //});
+      prolog.finishClient();
+
+      prolog.jsonQuery("metadata_robot(Robot)", function(result){
+        summary_string += "Robot & " + result.Robot + "\\\\\n\\hline\n";
+      //});
+      prolog.finishClient();
+
+      prolog.jsonQuery("metadata_start(Start)", function(result){
+        summary_string += "Starttime & " + result.Start + "\\\\\n\\hline\n";
+      //});
+      prolog.finishClient();
+
+      prolog.jsonQuery("metadata_end(End)", function(result){
+        summary_string += "Endtime & " + result.End + "\\\\\n\\hline\n";
+      //});
+      prolog.finishClient();
+
+      summary_string += "\\end{tabular}\n";
+      summary_string += "\\subsection{Experiment run}\n";
+      summary_string += "\\begin{tabular}{|l|p{8cm}|}\n\\hline\n";
+
+
+      // get tasks
+      prolog.jsonQuery(whitelist_query, function(result){
+        //console.log(result);
+        //summary_string += "\\includegraphics[scale=0.5]{" + result.Image + ".png} & \\begin{tabular}\\\\\n" + result.T + "\\\\\n" + result.Goal + "\\\\\n" + result.Start + "\\\\\n" + "\\end{tabular}\\\\\n\\hline\n";
+        summary_string += "insert image here & \\{begin{tabular}\\\\\n" + result.T + "\\\\\n" + result.Goal + "\\\\\n" + result.Start + "\\\\\n" + "\\end{tabular}}\\\\\n\\hline\n";
+      
+      prolog.nextQuery(callback1);
+
+      function callback1(result) {
+        //console.log(result);
+        if (result == "false.\n\n"||result == "true.\n\n") {
+          console.log("done");
+          summary_string += "\\end{tabular}\n";
+          summary_string += latex_tail;
+          console.log(summary_string);
+
+          var latexBlob = new Blob([summary_string], {type : 'text/tex'});
+          var div = document.getElementById('control_panel');
+          var newlink = document.createElement('a');
+          var url = URL.createObjectURL(latexBlob);
+          newlink.href = url;
+          newlink.download = 'summary.tex';
+          var tn = document.createTextNode('download summary');
+          newlink.appendChild(tn);
+          div.appendChild(newlink);
+
+          //prolog.finishClient();
+        } else {
+          // do stuff
+          //console.log(result);
+          //summary_string += "\\includegraphics[scale=0.5]{" + result.Image + ".png} & \\begin{tabular}\\\\\n" + result.T + "\\\\\n" + result.Goal + "\\\\\n" + result.Start + "\\\\\n" + "\\end{tabular}\\\\\n\\hline\n";
+          summary_string += "insert image here & {\\begin{tabular}\\\\\n" + result.T + "\\\\\n" + result.Goal + "\\\\\n" + result.Start + "\\\\\n" + "\\end{tabular}}\\\\\n\\hline\n";
+          //summary_string += result.T + "\n";
+          prolog.nextQuery(callback1);
+        }
+
+      }
+
+
+      //summary_string += latex_tail;
+      //console.log(summary_string);
+
+      //create file and download link
+      /*var latexBlob = new Blob([summary_string], {type : 'text/tex'});
+      var div = document.getElementById('control_panel');
+      var newlink = document.createElement('a');
+      var url = URL.createObjectURL(latexBlob);
+      newlink.href = url;
+      newlink.download = 'summary.tex';
+      var tn = document.createTextNode('download summary');
+      newlink.appendChild(tn);
+      div.appendChild(newlink);*/
+
+      });});});});});});});});
+
+    };
+
+    function get_image() {
+      var canvas = document.querySelector('#markers > canvas:nth-child(1)');
+      canvas.toBlob(blobcallback, "image/png");
+
+      function blobcallback(blob) {
+        var newlink = document.createElement('a');
+        newlink.download = 'canvas.png';
+        newlink.textContent = " download canvas ";
+        var url = URL.createObjectURL(blob);
+        newlink.href = url;
+
+        var div = document.getElementById('control_panel');
+        div.appendChild(newlink);
+      }
+      //var url = canvas.toDataURL("image/png");
+
+
+    };
+
+  </script>
+</head>
+
+<body onload="init()" style="position:relative; left:20px;">
+  <h1>Experiment Summary Generator</h1>
+  <div>
+  <div id="markers" style="position:absolute; top:75px; width:950px; border: 1px black solid; "></div>
+
+  <div id="control_panel" style="position:relative; top:510px;">
+      <input id="generate_summary" type="button" value="magic" onclick="generate_summary()">
+      <input id="get_image" type="button" value="get image" onclick="get_image()">
+  </div>
+  </div>
+
+</body>
+</html>
